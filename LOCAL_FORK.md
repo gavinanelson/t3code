@@ -54,12 +54,33 @@ This machine's desktop launcher runs the local checkout through:
 ~/.local/bin/t3code-desktop
 ```
 
-That wrapper launches `bun dev:desktop` from `/home/gavin/Code/t3code`, so the app you open is this fork, not the downloaded nightly AppImage. The previous AppImage launcher is kept at:
+That wrapper launches `bun dev:desktop` from `/home/gavin/Code/t3code`, so the app you open is this fork, not the downloaded nightly AppImage. The downloaded nightly AppImage cache and fallback launcher were removed.
+
+Terminal commands are also shadowed through local shims:
 
 ```bash
-~/.local/bin/t3code-desktop-nightly
+~/.local/bin/t3
+~/.local/bin/t3code
 ```
+
+Those shims run the CLI from `/home/gavin/Code/t3code` instead of the Nix nightly package.
 
 The project is registered in T3 Code as `T3 Code Fork` with path `/home/gavin/Code/t3code`.
 
 After changing branches or updating dependencies, close the running T3 Code window and open T3 Code again from the app launcher so the local desktop process restarts from this checkout.
+
+## Aether Theme
+
+The local app imports a gitignored CSS file:
+
+```bash
+apps/web/src/local-aether-theme.css
+```
+
+The desktop launcher refreshes that file from:
+
+```bash
+~/.config/aether/theme/t3code.css
+```
+
+That preserves the same Aether theme that the old nightly AppImage wrapper injected. If the source theme changes while the dev app is running, restart T3 Code from the launcher to refresh the copied CSS.
