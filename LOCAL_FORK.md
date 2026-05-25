@@ -9,13 +9,13 @@ This checkout is Gavin's fork of `pingdotgg/t3code`.
 
 ## Updating From Upstream
 
-From this repo:
+From this repo, with a clean working tree:
 
 ```bash
 ./scripts/sync-gavin-fork.sh
 ```
 
-The script fetches upstream, fast-forwards `main`, pushes `main` to `origin`, then rebases `gavin/nightly-custom` on top of it.
+The script fetches upstream, fast-forwards `main`, pushes `main` to `origin`, then rebases `gavin/nightly-custom` on top of it and force-pushes the rebased custom branch with lease protection.
 
 If the rebase conflicts, fix the conflicts, then run:
 
@@ -46,41 +46,64 @@ For the desktop app:
 bun dev:desktop
 ```
 
-## Opening In T3 Code
+## Building And Installing T3 Code Fork
 
-This machine's desktop launcher runs the local checkout through:
-
-```bash
-~/.local/bin/t3code-desktop
-```
-
-That wrapper launches `bun dev:desktop` from `/home/gavin/Code/t3code`, so the app you open is this fork, not the downloaded nightly AppImage. The downloaded nightly AppImage cache and fallback launcher were removed.
-
-Terminal commands are also shadowed through local shims:
+Build and install the forked desktop app:
 
 ```bash
-~/.local/bin/t3
-~/.local/bin/t3code
+./scripts/install-t3-code-fork-linux.sh
 ```
 
-Those shims run the CLI from `/home/gavin/Code/t3code` instead of the Nix nightly package.
+The script:
 
-The project is registered in T3 Code as `T3 Code Fork` with path `/home/gavin/Code/t3code`.
+- copies the local Aether theme into the gitignored CSS hook;
+- runs `bun install --frozen-lockfile`;
+- builds the Linux AppImage;
+- extracts it into `~/.local/share/t3-code-fork/appdir`;
+- updates both `~/.local/bin/t3-code-fork` and `~/.local/bin/t3code` to launch that extracted build;
+- writes user desktop entries for both `T3 Code Fork` and the `t3code.desktop` override.
 
-After changing branches or updating dependencies, close the running T3 Code window and open T3 Code again from the app launcher so the local desktop process restarts from this checkout.
+Useful flags:
+
+```bash
+T3_CODE_FORK_SKIP_BUN_INSTALL=1 ./scripts/install-t3-code-fork-linux.sh
+T3_CODE_FORK_SKIP_BUILD=1 ./scripts/install-t3-code-fork-linux.sh
+T3_CODE_FORK_ARCHIVE_OLD_INSTALL=0 ./scripts/install-t3-code-fork-linux.sh
+```
+
+## Opening T3 Code Fork
+
+This machine's app launcher should use the user-level desktop entries in:
+
+```bash
+~/.local/share/applications/t3-code-fork.desktop
+~/.local/share/applications/t3code.desktop
+```
+
+Both route to the local wrapper:
+
+```bash
+~/.local/bin/t3-code-fork
+```
+
+`~/.local/bin/t3code` is a symlink to that same wrapper, so terminal launches also use the forked installed build.
 
 ## Aether Theme
 
-The local app imports a gitignored CSS file:
+The local app imports a gitignored generated CSS file:
 
 ```bash
 apps/web/src/local-aether-theme.css
 ```
 
-The desktop launcher refreshes that file from:
+The install script refreshes that file from the active Aether palette:
 
 ```bash
-~/.config/aether/theme/t3code.css
+~/.config/aether/theme/colors.toml
 ```
 
-That preserves the same Aether theme that the old nightly AppImage wrapper injected. If the source theme changes while the dev app is running, restart T3 Code from the launcher to refresh the copied CSS.
+It uses `scripts/generate-aether-t3code-theme.sh`, which writes higher-specificity `html:root` variables so upstream default CSS cannot override the Aether colors. If the source theme changes, rerun:
+
+```bash
+bun run fork:install
+```
