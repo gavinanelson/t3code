@@ -6,6 +6,7 @@ import {
   PickFolderOptionsSchema,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
@@ -28,6 +29,103 @@ const ContextMenuInput = Schema.Struct({
   items: Schema.Array(ContextMenuItemSchema),
   position: Schema.optionalKey(ContextMenuPosition),
 });
+
+type AetherColors = Readonly<Record<string, string>>;
+
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+
+function readTomlStringValues(raw: string): AetherColors {
+  const colors: Record<string, string> = {};
+  for (const line of raw.split(/\r?\n/)) {
+    const match = line.match(/^\s*([A-Za-z0-9_-]+)\s*=\s*"([^"]+)"\s*(?:#.*)?$/);
+    if (!match) continue;
+    const [, key, value] = match;
+    if (key && value && HEX_COLOR_PATTERN.test(value)) {
+      colors[key] = value;
+    }
+  }
+  return colors;
+}
+
+function requiredColor(colors: AetherColors, key: string): string | null {
+  return colors[key] ?? null;
+}
+
+function createAetherThemeCss(colors: AetherColors): string | null {
+  const background = requiredColor(colors, "background");
+  const foreground = requiredColor(colors, "foreground");
+  const accent = requiredColor(colors, "accent");
+  if (!background || !foreground || !accent) return null;
+
+  const muted = colors.color8 ?? foreground;
+  const red = colors.color1 ?? accent;
+  const green = colors.color2 ?? accent;
+  const pink = colors.color3 ?? accent;
+  const blue = colors.color4 ?? accent;
+  const magenta = colors.color5 ?? accent;
+  const cyan = colors.color6 ?? accent;
+  const brightRed = colors.color9 ?? red;
+  const brightGreen = colors.color10 ?? green;
+  const brightPink = colors.color11 ?? pink;
+  const brightBlue = colors.color12 ?? blue;
+  const brightMagenta = colors.color13 ?? magenta;
+  const brightCyan = colors.color14 ?? cyan;
+  const brightForeground = colors.color15 ?? foreground;
+
+  return `
+html:root,
+html:root.dark {
+  color-scheme: dark;
+  --background: ${background};
+  --app-chrome-background: ${background};
+  --foreground: ${foreground};
+  --card: color-mix(in srgb, ${background} 92%, ${accent});
+  --card-foreground: ${foreground};
+  --popover: color-mix(in srgb, ${background} 90%, ${accent});
+  --popover-foreground: ${foreground};
+  --primary: ${accent};
+  --primary-foreground: ${brightForeground};
+  --secondary: color-mix(in srgb, ${background} 72%, ${blue});
+  --secondary-foreground: ${foreground};
+  --muted: color-mix(in srgb, ${background} 76%, ${muted});
+  --muted-foreground: color-mix(in srgb, ${foreground} 62%, ${muted});
+  --accent: color-mix(in srgb, ${accent} 42%, ${background});
+  --accent-foreground: ${foreground};
+  --destructive: ${red};
+  --destructive-foreground: ${brightRed};
+  --border: color-mix(in srgb, ${foreground} 14%, transparent);
+  --input: color-mix(in srgb, ${foreground} 18%, transparent);
+  --ring: ${brightBlue};
+  --info: ${cyan};
+  --info-foreground: ${brightCyan};
+  --success: ${green};
+  --success-foreground: ${brightGreen};
+  --warning: ${pink};
+  --warning-foreground: ${brightPink};
+  --aether-magenta: ${magenta};
+  --aether-magenta-bright: ${brightMagenta};
+}
+
+html:root body,
+html:root.dark body {
+  background:
+    radial-gradient(circle at 18% 12%, color-mix(in srgb, ${brightBlue} 18%, transparent), transparent 28rem),
+    radial-gradient(circle at 82% 10%, color-mix(in srgb, ${brightMagenta} 12%, transparent), transparent 24rem),
+    ${background};
+}
+`.trim();
+}
+
+function readAetherThemeCss(input: {
+  readonly fileSystem: FileSystem.FileSystem;
+  readonly colorsPath: string;
+}): Effect.Effect<string | null> {
+  const colorsPath = process.env.AETHER_COLORS_FILE ?? input.colorsPath;
+  return input.fileSystem.readFileString(colorsPath).pipe(
+    Effect.map((raw) => createAetherThemeCss(readTomlStringValues(raw))),
+    Effect.catch(() => Effect.succeed(null)),
+  );
+}
 
 function toWebSocketBaseUrl(httpBaseUrl: URL): string {
   const url = new URL(httpBaseUrl.href);
@@ -100,6 +198,23 @@ export const setTheme = makeIpcMethod({
   handler: Effect.fn("desktop.ipc.window.setTheme")(function* (theme) {
     const electronTheme = yield* ElectronTheme.ElectronTheme;
     yield* electronTheme.setSource(theme);
+  }),
+});
+
+export const getAetherThemeCss = makeIpcMethod({
+  channel: IpcChannels.GET_AETHER_THEME_CSS_CHANNEL,
+  payload: Schema.Void,
+  result: Schema.NullOr(Schema.String),
+  handler: Effect.fn("desktop.ipc.window.getAetherThemeCss")(function* () {
+    const environment = yield* DesktopEnvironment.DesktopEnvironment;
+    const fileSystem = yield* FileSystem.FileSystem;
+    return yield* readAetherThemeCss({
+      fileSystem,
+      colorsPath: environment.path.join(
+        environment.homeDirectory,
+        ".config/aether/theme/colors.toml",
+      ),
+    });
   }),
 });
 

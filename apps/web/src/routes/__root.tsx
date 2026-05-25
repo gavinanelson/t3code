@@ -46,6 +46,7 @@ import {
 import { useStore } from "../store";
 import { useUiStateStore } from "../uiStateStore";
 import { syncBrowserChromeTheme } from "../hooks/useTheme";
+import { useDesktopAetherTheme } from "../hooks/useDesktopAetherTheme";
 import {
   ensureEnvironmentConnectionBootstrapped,
   getPrimaryEnvironmentConnection,
@@ -103,6 +104,7 @@ function RootRouteView() {
   const pathname = useLocation({ select: (location) => location.pathname });
   const { authGateState } = Route.useRouteContext();
   const primaryEnvironmentAuthenticated = authGateState.status === "authenticated";
+  useDesktopAetherTheme();
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
